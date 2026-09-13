@@ -1,0 +1,19 @@
+/.bundle/
+/.idea/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
+
+# rspec failure tracking
+.rspec_status
+
+# Real personal documents and everything derived from them: source PDFs, the
+# extracted text used by :live specs, and the ground truth answer key that must
+# quote their real values. Kept local only. The non-live suite uses the
+# synthetic spec/fixtures/sample-*.pdf instead.
+/spec/fixtures/live/
+.DS_Store
