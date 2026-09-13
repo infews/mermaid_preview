@@ -96,21 +96,4 @@ describe MermaidPreview::Mmdc do
       _(File.exist?(target)).must_equal false
     end
   end
-
-  describe ".available!" do
-    it "returns the path when mmdc is installed" do
-      bin = mkdirs(tmpdir, "bin").first
-      make_executable(bin, "mmdc")
-
-      with_path(bin) { _(MermaidPreview::Mmdc.available!).must_equal File.join(bin, "mmdc") }
-    end
-
-    it "points at the init script when it is not" do
-      error = with_path(tmpdir) do
-        _ { MermaidPreview::Mmdc.available! }.must_raise MermaidPreview::MissingDependencyError
-      end
-
-      _(error.message).must_equal "mmdc not found; run mmd-preview-init"
-    end
-  end
 end

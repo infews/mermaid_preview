@@ -62,22 +62,4 @@ describe MermaidPreview::Executable do
       with_path(tmpdir) { _(executable.exist?("widget")).must_equal false }
     end
   end
-
-  describe ".find!" do
-    it "returns the path when the command is there" do
-      bin = mkdirs(tmpdir, "bin").first
-      make_executable(bin, "widget")
-
-      with_path(bin) { _(executable.find!("widget", hint: "install it")).must_equal File.join(bin, "widget") }
-    end
-
-    it "raises with the hint when it is not" do
-      error = with_path(tmpdir) do
-        _ { executable.find!("mmdc", hint: "run mmd-preview-init") }
-          .must_raise MermaidPreview::MissingDependencyError
-      end
-
-      _(error.message).must_equal "mmdc not found; run mmd-preview-init"
-    end
-  end
 end

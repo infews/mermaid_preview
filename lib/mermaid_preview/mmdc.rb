@@ -8,14 +8,11 @@ module MermaidPreview
   # run from a bad one; knows nothing about where the SVG ends up.
   class Mmdc
     EXECUTABLE = "mmdc"
-    INSTALL_HINT = "run mmd-preview-init"
 
     # mmdc can exit 0 and still write nothing, so success means "there is an SVG".
     Result = Data.define(:ok, :output) do
       def ok? = ok
     end
-
-    def self.available! = Executable.find!(EXECUTABLE, hint: INSTALL_HINT)
 
     def initialize(theme:, background:, stylesheet: nil, puppeteer_config: Paths.puppeteer_config)
       @theme = theme
@@ -40,7 +37,8 @@ module MermaidPreview
 
     def stylesheet_argv = @stylesheet ? ["-C", @stylesheet] : []
 
-    # Re-checked every render: mmd-preview-init may write it while we're running.
+    # Re-checked every render, so writing the config mid-session takes effect
+    # without a restart.
     def puppeteer_argv
       File.file?(@puppeteer_config.to_s) ? ["-p", @puppeteer_config] : []
     end

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module MermaidPreview
-  # Where mmd-preview-init leaves the things this tool reads. Methods rather
-  # than constants so XDG_CONFIG_HOME is honoured whenever it's asked for.
+  # Where this tool looks for the config you may have written by hand. Methods
+  # rather than constants so XDG_CONFIG_HOME is honoured whenever it's asked for.
   module Paths
     module_function
 

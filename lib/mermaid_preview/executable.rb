@@ -12,10 +12,6 @@ module MermaidPreview
 
     def exist?(name) = !find(name).nil?
 
-    def find!(name, hint:)
-      find(name) || fail(MissingDependencyError, "#{name} not found; #{hint}")
-    end
-
     def runnable?(path) = File.file?(path) && File.executable?(path)
 
     def search_path = ENV.fetch("PATH", "").split(File::PATH_SEPARATOR).reject(&:empty?)

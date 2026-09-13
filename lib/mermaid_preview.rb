@@ -19,7 +19,9 @@ module MermaidPreview
 end
 
 require_relative "mermaid_preview/browser"
+require_relative "mermaid_preview/browsers"
 require_relative "mermaid_preview/cli"
+require_relative "mermaid_preview/doctor"
 require_relative "mermaid_preview/executable"
 require_relative "mermaid_preview/mmdc"
 require_relative "mermaid_preview/options"

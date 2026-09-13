@@ -17,20 +17,59 @@ describe MermaidPreview::Session do
     MermaidPreview::Session.new(options, reporter: MermaidPreview::Reporter.new(log))
   end
 
+  # Answers -o with a fixed SVG and ignores every other argument.
+  def stub_mmdc
+    bin = mkdirs(tmpdir, "bin").first
+    script = File.join(bin, "mmdc")
+    File.write(script, <<~SH)
+      #!/bin/sh
+      while [ $# -gt 0 ]; do
+        if [ "$1" = "-o" ]; then shift; printf '<svg id="stub"/>' > "$1"; fi
+        shift
+      done
+    SH
+    FileUtils.chmod(0o755, script)
+    bin
+  end
+
+  # Nothing installed, and none of it read from the real machine.
+  def on_a_bare_machine(&)
+    with_env({"PATH" => mkdirs(tmpdir, "empty").first,
+              "XDG_CONFIG_HOME" => File.join(tmpdir, "config"),
+              "PUPPETEER_CACHE_DIR" => File.join(tmpdir, "bare")}, &)
+  end
+
+  # Everything the Doctor asks for, all of it disposable.
+  def on_a_ready_machine(&)
+    with_env({"PATH" => stub_mmdc,
+              "XDG_CONFIG_HOME" => File.join(tmpdir, "config"),
+              "PUPPETEER_EXECUTABLE_PATH" => make_executable(tmpdir, "chrome-stub")}, &)
+  end
+
   describe "before it starts" do
-    it "refuses to start when mmdc is not installed" do
-      error = with_path(tmpdir) do
+    it "refuses to start when dependencies are missing" do
+      error = on_a_bare_machine do
         _ { session_for(StringIO.new).run }.must_raise MermaidPreview::MissingDependencyError
       end
 
-      _(error.message).must_equal "mmdc not found; run mmd-preview-init"
+      _(error.message).must_include "mmd-preview: unmet dependencies"
+      _(error.message).must_include "brew install mermaid-cli"
     end
 
-    it "checks for mmdc before it creates a workspace" do
+    it "reports the browser alongside mmdc rather than stopping at the first problem" do
+      error = on_a_bare_machine do
+        _ { session_for(StringIO.new).run }.must_raise MermaidPreview::MissingDependencyError
+      end
+
+      _(error.message).must_match(/✗ mmdc/)
+      _(error.message).must_match(/✗ browser/)
+    end
+
+    it "checks dependencies before it creates a workspace" do
       opened = false
 
       MermaidPreview::Workspace.stub(:open, ->(*) { opened = true }) do
-        with_path(tmpdir) do
+        on_a_bare_machine do
           _ { session_for(StringIO.new).run }.must_raise MermaidPreview::MissingDependencyError
         end
       end
@@ -42,21 +81,6 @@ describe MermaidPreview::Session do
   # A real run, end to end, against a stub mmdc and wound up by a real signal.
   describe "a full run" do
     let(:log) { StringIO.new }
-
-    # Answers -o with a fixed SVG and ignores every other argument.
-    def stub_mmdc
-      bin = mkdirs(tmpdir, "bin").first
-      script = File.join(bin, "mmdc")
-      File.write(script, <<~SH)
-        #!/bin/sh
-        while [ $# -gt 0 ]; do
-          if [ "$1" = "-o" ]; then shift; printf '<svg id="stub"/>' > "$1"; fi
-          shift
-        done
-      SH
-      FileUtils.chmod(0o755, script)
-      bin
-    end
 
     def port_from_log = log.string[%r{http://127\.0\.0\.1:(\d+)/}, 1].to_i
 
@@ -96,7 +120,7 @@ describe MermaidPreview::Session do
 
     it "puts the signal handlers back the way it found them" do
       under_sentinel do |sentinel|
-        with_path(stub_mmdc) { run_session }
+        on_a_ready_machine { run_session }
 
         MermaidPreview::Session::SIGNALS.each do |signal|
           _(Signal.trap(signal, sentinel)).must_be_same_as sentinel
@@ -108,7 +132,7 @@ describe MermaidPreview::Session do
       served = nil
 
       under_sentinel do
-        with_path(stub_mmdc) do
+        on_a_ready_machine do
           run_session { |port| served = Net::HTTP.get(URI("http://127.0.0.1:#{port}/preview.svg")) }
         end
       end
@@ -117,13 +141,13 @@ describe MermaidPreview::Session do
     end
 
     it "releases the port on the way out" do
-      port = under_sentinel { with_path(stub_mmdc) { run_session } }
+      port = under_sentinel { on_a_ready_machine { run_session } }
 
       _ { TCPSocket.new("127.0.0.1", port).close }.must_raise Errno::ECONNREFUSED
     end
 
     it "reports the URL, the watched file and the first render" do
-      under_sentinel { with_path(stub_mmdc) { run_session } }
+      under_sentinel { on_a_ready_machine { run_session } }
 
       _(log.string).must_match(%r{http://127\.0\.0\.1:\d+/})
       _(log.string).must_include "watching chart.mmd"

@@ -11,7 +11,8 @@ module MermaidPreview
     end
 
     def run
-      Mmdc.available!
+      diagnosis = Doctor.examine
+      fail MissingDependencyError, diagnosis.to_s unless diagnosis.ok?
 
       Workspace.open { |workspace| serve(workspace, renderer_for(workspace)) }
     end
