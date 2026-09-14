@@ -137,5 +137,21 @@ describe MermaidPreview::Workspace do
     it "never asks for the scratch render" do
       _(referenced).wont_include MermaidPreview::Workspace::SCRATCH
     end
+
+    # Stylesheets written for mermaid-in-a-browser prefix everything with
+    # `.mermaid`, because that is the element mermaid.initialize() renders into.
+    # mmdc's SVG has no such ancestor, so without this class every rule in such
+    # a sheet misses and the diagram comes out in bare theme colours.
+    it "gives the diagram the .mermaid ancestor that mermaid stylesheets are written against" do
+      _(template).must_match(/<div class="stage mermaid"/)
+    end
+
+    # The link is fetched once at page load and never again, so without a
+    # cache-buster tied to the revision a CSS edit never reaches an open page —
+    # and worse, a rule the user has deleted keeps applying until a manual
+    # reload, because the stale sheet still carries it.
+    it "re-requests the stylesheet when the revision changes" do
+      _(template).must_match(/\.href = ['"]#{Regexp.escape(MermaidPreview::Workspace::STYLESHEET)}\?rev=/o)
+    end
   end
 end

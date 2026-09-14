@@ -63,7 +63,7 @@
     .canvas { transition: opacity 120ms ease; }
   }
 </style>
-<link rel="stylesheet" href="user.css">
+<link rel="stylesheet" href="user.css" id="sheet">
 </head>
 <body>
   <div class="bar">
@@ -77,7 +77,11 @@
     </span>
   </div>
   <pre class="error" id="error"></pre>
-  <div class="canvas" id="canvas"><div class="stage" id="stage"></div></div>
+  <!-- `mermaid` is the class mermaid.initialize() renders into in a browser, so
+       it is what published mermaid stylesheets prefix their selectors with. The
+       SVG mmdc hands us has no such ancestor of its own; supplying it here is
+       what lets an off-the-shelf sheet style this preview unchanged. -->
+  <div class="canvas" id="canvas"><div class="stage mermaid" id="stage"></div></div>
 
 <script>
 (() => {
@@ -87,6 +91,7 @@
   const dot    = document.getElementById('dot');
   const name   = document.getElementById('name');
   const level  = document.getElementById('level');
+  const sheet  = document.getElementById('sheet');
 
   let scale = 1;
   const setScale = v => {
@@ -110,6 +115,13 @@
     }
     if (state.rev === rev) return;
     rev = state.rev;
+
+    // The browser fetched the sheet once at page load and will never revisit it
+    // on its own, so a stale copy would keep applying rules the file no longer
+    // has. Re-pointing it per revision is what makes an edit — or a deletion —
+    // actually show up. Done for failed renders too: the CSS may be what
+    // changed, and it covers a first render that failed before publishing one.
+    sheet.href = 'user.css?rev=' + rev;
 
     if (state.ok) {
       const svg = await (await fetch('preview.svg', { cache: 'no-store' })).text();

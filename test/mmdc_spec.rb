@@ -11,15 +11,23 @@ describe MermaidPreview::Mmdc do
     )
   end
 
-  # Renders against a stubbed Open3, recording the argv mmdc would have run.
+  # Renders against a stubbed Open3, recording the argv mmdc would have run and
+  # the mermaid config that was on disk while it ran — the config is temporary,
+  # so reading it after the fact is too late.
   def render(mmdc, wrote: nil, success: true)
     stub = lambda do |*argv|
       @argv = argv
+      @config = config_during(argv)
       File.write(target, wrote) if wrote
       ["mmdc output", FakeStatus.new(ok: success)]
     end
 
     Open3.stub(:capture2e, stub) { mmdc.render("chart.mmd", to: target) }
+  end
+
+  def config_during(argv)
+    index = argv.index("-c")
+    JSON.parse(File.read(argv[index + 1])) if index
   end
 
   def argv_for(mmdc)
@@ -34,16 +42,6 @@ describe MermaidPreview::Mmdc do
       _(argv).must_equal ["mmdc", "-i", "chart.mmd", "-o", target, "-t", "dark", "-b", "white"]
     end
 
-    it "adds -C when there is a stylesheet" do
-      argv = argv_for(build(stylesheet: "/tmp/style.css"))
-
-      _(argv[argv.index("-C") + 1]).must_equal "/tmp/style.css"
-    end
-
-    it "leaves -C out when there is not" do
-      _(argv_for(build)).wont_include "-C"
-    end
-
     it "adds -p when the puppeteer config exists" do
       config = write_file("puppeteer.json", "{}")
       argv = argv_for(build(puppeteer_config: config))
@@ -53,6 +51,43 @@ describe MermaidPreview::Mmdc do
 
     it "leaves -p out when the config is not there yet" do
       _(argv_for(build)).wont_include "-p"
+    end
+  end
+
+  # mermaid scopes its theme CSS to the diagram's id (#my-svg .node rect), so a
+  # plain `.node rect` rule loses on specificity however late it arrives. Handing
+  # the CSS over as themeCSS makes mermaid scope the user's rules the same way
+  # and emit them after its own, which is the only way they win.
+  describe "the stylesheet" do
+    let(:stylesheet) { write_file("style.css", ".node rect { stroke-width: 7px; }") }
+
+    it "goes to mermaid as themeCSS" do
+      render(build(stylesheet: stylesheet), wrote: "<svg/>")
+
+      _(@config["themeCSS"]).must_equal ".node rect { stroke-width: 7px; }"
+    end
+
+    it "is not passed as -C, which mermaid leaves unscoped for the theme to outrank" do
+      _(argv_for(build(stylesheet: stylesheet))).wont_include "-C"
+    end
+
+    it "is re-read every render, so edits land without a restart" do
+      mmdc = build(stylesheet: stylesheet)
+      render(mmdc, wrote: "<svg/>")
+      File.write(stylesheet, ".node rect { stroke-width: 9px; }")
+      render(mmdc, wrote: "<svg/>")
+
+      _(@config["themeCSS"]).must_equal ".node rect { stroke-width: 9px; }"
+    end
+
+    it "sends no config at all when there is no stylesheet" do
+      _(argv_for(build)).wont_include "-c"
+    end
+
+    it "leaves no config file behind" do
+      argv = argv_for(build(stylesheet: stylesheet))
+
+      _(File.exist?(argv[argv.index("-c") + 1])).must_equal false
     end
   end
 

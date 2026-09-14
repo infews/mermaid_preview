@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "json"
 require "open3"
+require "tempfile"
 
 module MermaidPreview
   # The mermaid-cli binary. Knows how to build its argv and how to tell a good
@@ -25,17 +27,37 @@ module MermaidPreview
     # one, rather than resting on a caller having tidied up after the last.
     def render(source, to:)
       FileUtils.rm_f(to)
-      output, status = Open3.capture2e(*argv(source, to))
-      Result.new(ok: status.success? && !File.size?(to).nil?, output: output)
+      with_config do |config|
+        output, status = Open3.capture2e(*argv(source, to, config))
+        Result.new(ok: status.success? && !File.size?(to).nil?, output: output)
+      end
     end
 
     private
 
-    def argv(source, target)
-      [EXECUTABLE, "-i", source, "-o", target, "-t", @theme, "-b", @background] + stylesheet_argv + puppeteer_argv
+    def argv(source, target, config)
+      [EXECUTABLE, "-i", source, "-o", target, "-t", @theme, "-b", @background] +
+        config_argv(config) + puppeteer_argv
     end
 
-    def stylesheet_argv = @stylesheet ? ["-C", @stylesheet] : []
+    def config_argv(config) = config ? ["-c", config] : []
+
+    # The user's CSS goes in as mermaid's themeCSS rather than as -C. mermaid
+    # scopes its theme to the diagram's id, so a bare `.node rect` rule always
+    # loses to `#my-svg .node rect` however late it arrives; themeCSS gets the
+    # same scoping and is emitted after the theme, which is what makes it win.
+    #
+    # Read fresh on every render, so editing the stylesheet takes effect without
+    # a restart. The config only lives as long as the mmdc run.
+    def with_config
+      return yield nil unless @stylesheet
+
+      Tempfile.create(["mmd-preview", ".json"]) do |file|
+        file.write(JSON.generate(themeCSS: File.read(@stylesheet)))
+        file.close
+        yield file.path
+      end
+    end
 
     # Re-checked every render, so writing the config mid-session takes effect
     # without a restart.
