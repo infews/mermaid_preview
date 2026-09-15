@@ -170,8 +170,36 @@ name it in `font-family`.
 
 **Don't reuse the frame's token names.** The preview page declares
 `--paper`, `--ink`, `--muted`, `--rule`, and `--fail` on `:root` for its own
-chrome. A `:root { --ink: … }` in your sheet will recolour the toolbar along with
+chrome. A `:root { --ink: … }` in your sheet will recolor the toolbar along with
 your diagram. Prefix your tokens.
+
+**`!important` on label text defeats `classDef`.** Mermaid compiles a `classDef`
+into id-scoped `!important` rules, but only for three targets:
+
+```css
+#my-svg .hidden>*   { fill:none!important; stroke:none!important; color:transparent!important; }
+#my-svg .hidden span{ fill:none!important; stroke:none!important; color:transparent!important; }
+#my-svg .hidden tspan{ fill:transparent!important; }
+```
+
+The text itself lives one level deeper, in `<span class="nodeLabel"><p>…</p></span>`,
+and that `<p>` only ever *inherits* the transparency. An inherited value loses to
+any rule that matches the element directly — so a sheet containing
+
+```css
+.mermaid .node foreignObject p { color: var(--ink) !important; }   /* too broad */
+```
+
+re-exposes the text of every `classDef`-hidden node. The shape is invisible, the
+label is not. If you hide nodes this way, hide the whole subtree instead of
+fighting each text layer:
+
+```css
+.mermaid g.node.hidden { visibility: hidden !important; }
+```
+
+That leaves layout — and the edges into the node, which live outside the node
+group — untouched.
 
 **`-t base` is not available.** `mmdc` accepts only `default`, `forest`, `dark`,
 and `neutral`. `base` — the theme meant to be overridden — can still be selected
